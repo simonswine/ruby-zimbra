@@ -5,6 +5,10 @@ module Zimbra
       def all
         FolderService.all
       end
+    
+      def create(name, type)
+        FolderService.create(name, type)
+      end
 
       def find_all_by_view(view)
         FolderService.find_all_by_view(view)
@@ -24,7 +28,15 @@ module Zimbra
     def initialize(args = {})
       self.attributes = args
     end
+  
+    def delete
+      FolderService.delete(self)
+    end
     
+    def empty
+      FolderService.empty(self)
+    end
+ 
     def attributes=(args = {})
       ATTRS.each do |attr_name|
         self.send(:"#{attr_name}=", (args[attr_name] || args[attr_name.to_s])) if args.has_key?(attr_name) || args.has_key?(attr_name.to_s)
@@ -37,7 +49,39 @@ module Zimbra
       xml = invoke("n2:GetFolderRequest")
       parse_xml_responses(xml)
     end
+   
+    def create(name, view)
+      xml = invoke ("n2:CreateFolderRequest") do |message|
+        parent_path = File.dirname(name)
+        parent_id = nil
+        Folder.all.each do |folder|
+          if folder.absolute_folder_path == parent_path
+            parent_id = folder.id
+          end
+        end
+        
+        if parent_id.nil?
+          # Todo Recurse 
+          parent_id = nil
+        end
+
+        Builder.create(message, File.basename(name), view, parent_id)
+      end
+    end 
+   
+  
+    def delete(folder)
+      xml = invoke("n2:FolderActionRequest") do |message|
+        Builder.folder_request(message, folder.id, 'delete', 1)
+      end
+    end
     
+    def empty(folder)
+      xml = invoke("n2:FolderActionRequest") do |message|
+        Builder.folder_request(message, folder.id, 'empty', 1)
+      end
+    end
+ 
     def find_all_by_view(view)
       xml = invoke("n2:GetFolderRequest") do |message|
         Builder.find_all_by_view(message, view)
@@ -53,6 +97,22 @@ module Zimbra
       class << self
         def find_all_by_view(message, view)
           message.set_attr 'view', view
+        end
+    
+        def create(message, name, view, parent_id)
+          message.add 'folder' do |folder_elem|
+            folder_elem.set_attr 'name', name
+            folder_elem.set_attr 'l', parent_id
+            folder_elem.set_attr 'view', view unless view.nil?
+          end
+        end
+ 
+        def folder_request(message, id, action, recursive=nil)
+          message.add 'action' do |action_elem|
+            action_elem.set_attr 'id', id
+            action_elem.set_attr 'op', action
+            action_elem.set_attr 'recursive', recursive unless recursive.nil?
+          end
         end
       end
     end
