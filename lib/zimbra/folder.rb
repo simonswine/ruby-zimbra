@@ -18,7 +18,7 @@ module Zimbra
     ATTRS = [
       :id, :uuid, :name, :view, :absolute_folder_path,
       :parent_folder_id, :parent_folder_uuid,
-      :non_folder_item_count, :non_folder_item_size,
+      :non_folder_item_count, :non_folder_item_unread_count, :non_folder_item_size,
       :revision, :imap_next_uid, :imap_modified_sequence, :modified_sequence, :activesync_disabled,
       :modified_date
     ] unless const_defined?(:ATTRS)
@@ -52,21 +52,23 @@ module Zimbra
    
     def create(name, view)
       xml = invoke ("n2:CreateFolderRequest") do |message|
+        # remove traliing slash
+        name = name.gsub(/\/$/, "")         
         parent_path = File.dirname(name)
-        parent_id = nil
+        parent = nil
         Folder.all.each do |folder|
           if folder.absolute_folder_path == parent_path
-            parent_id = folder.id
+            parent = folder
           end
         end
         
-        if parent_id.nil?
-          # Todo Recurse 
-          parent_id = nil
+        if parent.nil?
+          parent = create(parent_path,view)
         end
 
-        Builder.create(message, File.basename(name), view, parent_id)
+        Builder.create(message, File.basename(name), view, parent)
       end
+      parse_xml_responses(xml).first
     end 
    
   
@@ -99,10 +101,10 @@ module Zimbra
           message.set_attr 'view', view
         end
     
-        def create(message, name, view, parent_id)
+        def create(message, name, view, parent)
           message.add 'folder' do |folder_elem|
             folder_elem.set_attr 'name', name
-            folder_elem.set_attr 'l', parent_id
+            folder_elem.set_attr 'l', parent.id
             folder_elem.set_attr 'view', view unless view.nil?
           end
         end
@@ -126,7 +128,8 @@ module Zimbra
         :absFolderPath => :absolute_folder_path, 
         :l => :parent_folder_id, 
         :luuid => :parent_folder_uuid, 
-        :n => :non_folder_item_count, 
+        :n => :non_folder_item_count,
+        :u => :non_folder_item_unread_count, 
         :s => :non_folder_item_size, 
         :rev => :revision, 
         :i4next => :imap_next_uid, 
@@ -148,6 +151,7 @@ module Zimbra
             attrs[attr_name] = (node/"@#{xml_name}").to_s
             attrs
           end
+          folder_attributes[:non_folder_item_unread_count] = 0 if folder_attributes[:non_folder_item_unread_count].nil?
           initialize_from_attributes(folder_attributes)
         end
 
