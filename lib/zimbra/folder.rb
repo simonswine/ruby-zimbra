@@ -105,6 +105,7 @@ module Zimbra
           message.add 'folder' do |folder_elem|
             folder_elem.set_attr 'name', name
             folder_elem.set_attr 'l', parent.id
+            folder_elem.set_attr 'f', '*'
             folder_elem.set_attr 'view', view unless view.nil?
           end
         end
