@@ -41,15 +41,19 @@ module Zimbra
         http.use_ssl = true
     
         res = http.request(req)
-        match = /\d+\,'([^']*)','([^']*)'/.match(res.body)
-      
+        
         resp_code = res.code.to_i
-        resp_code_inner = match[0].to_i
-        upload_id = match[2]
-
         raise "Wrong response code '#{resp_code}'" unless resp_code == 200    
+        
+        match = /\d+\,'([^']*)','([^']*)'/.match(res.body)
+        raise "Response body cannot be parsed '#{res.body}'" if match.nil?
+
+        resp_code_inner = match[0].to_i
         raise "Wrong inner response code '#{resp_code_inner}'" unless resp_code_inner == 200    
+        
+        upload_id = match[2]
         raise "Wrong upload id '#{upload_id}'" if upload_id.length < 20 
+
   
         return upload_id
       end
